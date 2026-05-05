@@ -1,10 +1,12 @@
 # Data Science Final Project - UCL Prediciton 
 
-- A data-driven analysis exploring the relationship between pitching characteristics and Tommy John surgery outcomes using Bayesian statistical methods and machine learning.
+- A data-driven analysis of Tommy John injury in the MLB between 2018 and 2024.
 
 ## Overview
 
-- This research project investigates potential correlating factors between pitches thrown and pitchers who undergo Tommy John surgery (ulnar collateral ligament reconstruction). The study employs Bayesian statistical methods to identify  correlations and develop predictive models for surgery risk assessment.
+- This research project investigates potential correlating factors between pitches thrown and pitchers who undergo Tommy John surgery (ulnar collateral ligament reconstruction). The study employs both traditional machine learning models and bayesian approaches to build a strong framework to better predict Tommy John Injury.
+- Machine Learning models were used as preliminarily methods to root out predictors that had limited impact upon predicting Tommy John Surgery. The focus of this study was on 'common' pitch types like fastball, slider, and curveball to build a framework that could predict if a certain ball came from a injured pitcher or not.
+- All of the preliminary work with the machine learning models was used to build a strong Bayesian Regression Model for predicitng injury outcomes, which had mixed results.
 
 **Research Presentation:** 
 - Preliminary findings were presented at the Conneticut Sports Analytics Symposium (CSAS) 2026 at UCONN.
