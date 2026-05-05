@@ -64,7 +64,7 @@ The research pipeline consists of:
 
 ### Methodology Image
 
-![Alt text](BayesBallModel.drawio.png)
+![A image of the research methodolgoy used in this project.](BayesBallModel.drawio.png)
 ## Key Findings
 
 The project identifies correlations between specific pitching patterns and Tommy John surgery risk, with the Bayesian hierarchical model providing probabilistic predictions that account for individual pitcher characteristics and uncertainty in the data.
