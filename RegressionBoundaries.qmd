@@ -1,0 +1,199 @@
+---
+title: "RegressionBoundaries"
+format: html
+---
+
+```{r}
+library(baseballr)
+library(tidyverse)
+library(tidymodels)
+library(tibble)
+library(dplyr)
+library(lubridate)
+library(olsrr)
+library(readr)
+library(rsample)
+library(tidymodels)
+library(glmnet)
+library(rpart)
+library(rpart.plot)
+library(caret)
+library(caTools) 
+library(randomForest) 
+library(ggplot2)
+library(ISLR2)
+library(pls)
+library(class)
+library(ROCR)
+library(pROC)
+```
+
+```{r}
+head(data_final)
+```
+
+```{r}
+data_final <- data_final %>% filter(., !pitch_type %in% c("CS",'FA','EP','FC','FO','KN','PO','SC','SV'))
+
+data_complete_na <- data_final %>%
+  select(surgery, release_speed, arm_angle, spin_axis, 
+         release_spin_rate, pitch_type, release_pos_z) %>%
+  na.omit()
+```
+
+```{r}
+data_complete_na %>% filter(pitch_type == 'FF')
+```
+
+## Ridge Regression Boundary
+
+```{r}
+#We will be using the glmnet package for this section, following instructions from the ISLP textbook.
+#We will begin with ridge regression
+
+#Set up X and Y
+x <- model.matrix(surgery ~ release_speed + arm_angle + spin_axis + release_spin_rate + pitch_type + release_pos_z  
+                  , data = data_complete_na)[,-1]
+y <- data_complete_na$surgery
+#Set up grid and fitting the ridge regression model
+grid <- 10^seq(10, -2, length = 100)
+ridge.mod <- glmnet(x,y, alpha = 0, lambda = grid)
+
+#Size of our matrix
+#dim(coef(ridge.mod))
+```
+
+```{r}
+#Create our training/testing data
+train <- sample(1:nrow(x), nrow(x) * 0.8)  
+test <- (-train)
+y.test <- y[test]
+```
+
+```{r}
+#Get the prediction class for our model and set as a factor.
+ridge.pred.prob <- predict(ridge.mod, s = 4, newx = x[test,], type = "response")
+
+# Convert probabilities to class predictions
+# Make sure you know what your surgery levels are
+data_complete_na$surgery <- as.factor(data_complete_na$surgery)
+
+ridge_pred_class <- ifelse(ridge.pred.prob > 0.285, 
+                          levels(data_complete_na$surgery)[2], 
+                          levels(data_complete_na$surgery)[1])
+ridge_pred_class <- as.factor(ridge_pred_class)
+
+# Get actual test values
+actual_class <- data_complete_na$surgery[test]
+
+# Create confusion matrix
+ridge_conf <- confusionMatrix(ridge_pred_class, 
+                             actual_class,
+                             positive = levels(actual_class)[2])
+
+print(ridge_conf)
+```
+
+```{r}
+library(pROC)
+
+# Step 1 — Get predicted probabilities (same as before)
+ridge.pred.prob <- predict(ridge.mod, s = 4, newx = x[test,], type = "response")
+
+# Step 2 — Find optimal threshold using Youden's J
+actual_class <- data_complete_na$surgery[test]
+
+roc_obj <- roc(actual_class, as.vector(ridge.pred.prob))
+
+best_youden <- coords(roc_obj, x="best", input="threshold", best.method="youden")
+print(best_youden)
+
+optimal_threshold <- best_youden$threshold
+
+# Step 3 — Apply optimal threshold instead of hardcoded 0.285
+data_complete_na$surgery <- as.factor(data_complete_na$surgery)
+
+ridge_pred_class <- ifelse(ridge.pred.prob > optimal_threshold,
+                           levels(data_complete_na$surgery)[2],
+                           levels(data_complete_na$surgery)[1])
+ridge_pred_class <- as.factor(ridge_pred_class)
+
+# Step 4 — Confusion matrix
+ridge_conf <- confusionMatrix(ridge_pred_class,
+                              actual_class,
+                              positive = levels(actual_class)[2])
+print(ridge_conf)
+
+# Step 5 — Optional: plot ROC curve with the chosen threshold marked
+plot(roc_obj, print.auc = TRUE, print.thres = "best",
+     main = "Ridge Regression ROC Curve")
+```
+
+```{r}
+#Create our training/testing data
+train <- sample(1:nrow(x), nrow(x) * 0.8)  
+test <- (-train)
+y.test <- y[test]
+
+ridge.mod <- glmnet(x[train,], y[train], alpha = 0, lambda = grid, thresh = 1e-12)
+ridge.pred <- predict(ridge.mod, s = 4, newx = x[test,])
+#Test MSE
+mean((ridge.pred - y.test)^2)
+
+#Find the best lambda
+cv.out <- cv.glmnet(x[train,], y[train], alpha = 0)
+plot(cv.out)
+
+#Best lambda actual calculation
+bestlam <- cv.out$lambda.min
+bestlam
+
+#Coefficients
+out <- glmnet(x, y, alpha = 0)
+predict(out, type = "coefficients", s = bestlam)[1:13,]
+```
+
+```{r}
+#Setting intereaction terms for new possible use
+```
+
+## Lasso Regression
+
+```{r}
+lasso.mod <- glmnet(x[train,], y[train],alpha = 1, lambda = grid, importance = TRUE)
+plot(lasso.mod, label = TRUE)
+```
+
+```{r}
+#Get the prediction class for our model and set as a factor.
+lasso.pred.prob <- predict(lasso.mod, s = 4, newx = x[test,], type = "response")
+data_complete_na$surgery <- as.factor(data_complete_na$surgery)
+
+# Convert probabilities to class predictions
+actual_class <- data_complete_na$surgery[test]
+
+roc_obj <- roc(actual_class, as.vector(lasso.pred.prob))
+
+best_youden <- coords(roc_obj, x="best", input="threshold", best.method="youden")
+print(best_youden)
+
+optimal_threshold <- best_youden$threshold
+
+lasso_pred_class <- ifelse(lasso.pred.prob > optimal_threshold, 
+                          levels(data_complete_na$surgery)[2], 
+                          levels(data_complete_na$surgery)[1])
+lasso_pred_class <- as.factor(lasso_pred_class)
+
+# Get actual test values
+actual_class <- data_complete_na$surgery[test]
+
+# Create confusion matrix
+lasso_conf <- confusionMatrix(lasso_pred_class, 
+                             actual_class,
+                             positive = levels(actual_class)[2])
+
+print(lasso_conf)
+
+plot(roc_obj, print.auc = TRUE, print.thres = "best",
+     main = "Ridge Regression ROC Curve")
+```

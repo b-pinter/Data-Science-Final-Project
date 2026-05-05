@@ -1,0 +1,926 @@
+---
+title: "MachineLearningModels"
+format: html
+---
+
+```{r}
+library(baseballr)
+library(tidyverse)
+library(tidymodels)
+library(tibble)
+library(dplyr)
+library(lubridate)
+library(olsrr)
+library(readr)
+library(rsample)
+library(tidymodels)
+library(glmnet)
+library(rpart)
+library(rpart.plot)
+library(caret)
+library(caTools) 
+library(randomForest) 
+library(ggplot2)
+library(ISLR2)
+library(pls)
+library(class)
+library(ROCR)
+```
+
+## Summary Write-Up
+
+-   Timeline is on track at the moment, since I was planning on over half my ML models done by the middle of this month, I have gotten most of the "big" ones put together and have begun analysis relating to them.
+
+    -   I plan on comparing the MSE scores, and looking at the weights for all of my models as well. What is becoming significant?
+
+    -   Multicollinearity is a major issue (will show a example of why below)
+
+# Frequentist and ML Approaches for Baseball
+
+## Establish Dataset
+
+```{r}
+#Load Data
+data_final = read_csv('data_smaller.csv')
+set.seed(1)
+```
+
+```{r}
+#Sending file
+
+write.csv(data_complete_na, "data_completed_na.csv") 
+```
+
+```{r}
+head(data_final)
+```
+
+```{r}
+data_final %>% count(pitch_type)
+```
+
+## Removing Redundant Pitches
+
+```{r}
+#So we're gonna drop some data from the pitch_type column, FC is "fielders choice" which really isn't a pitch. it also had some limited connections to the data.
+
+#I am also dropping pitches that had low amounts of existence to begin with. (Need to find research to back this)
+#drop_list <- ("CS","FA","EP",'FC','FO','KN')
+
+data_final <- data_final %>% filter(., !pitch_type %in% c("CS",'FA','EP','FC','FO','KN','PO','SC','SV'))
+```
+
+## Multiple Linear Regression
+
+```{r}
+#Using "+" for each term, "*" used to mark interaction terms.
+#Adding in release_pos_z since that is a well-used statistics for ball release position due to its ability to track the abll movement towards the catcher
+lm.fit <- lm(surgery ~ release_speed + arm_angle + spin_axis + release_spin_rate + pitch_type + release_pos_z , data = data_final)
+
+summary(lm.fit)
+```
+
+```{r}
+lm.fit <- lm(surgery ~ release_speed + arm_angle + spin_axis + release_spin_rate + release_pos_z + pitch_type, data = data_complete_na)
+
+summary(lm.fit)
+```
+
+### Checking Multiple Linear Regression Assumptions?
+
+```{r}
+#Checking model assumptions post-creation
+#What is happening LOL
+plot(lm.fit)
+```
+
+## Weighted Multiple Linear Regression
+
+Coming soon...
+
+## Ridge Regression
+
+```{r}
+#Had a issue with NA values, so removing them here before moving on.
+data_complete_na <- data_final %>%
+  select(surgery, release_speed, arm_angle, spin_axis, 
+         release_spin_rate, pitch_type, release_pos_z) %>%
+  na.omit()
+```
+
+```{r}
+#We will be using the glmnet package for this section, following instructions from the ISLP textbook.
+#We will begin with ridge regression
+
+#Set up X and Y
+x <- model.matrix(surgery ~ release_speed + arm_angle + spin_axis + release_spin_rate + pitch_type + release_pos_z, data = data_complete_na)[,-1]
+y <- data_complete_na$surgery
+#Set up grid and fitting the ridge regression model
+grid <- 10^seq(10, -2, length = 100)
+ridge.mod <- glmnet(x,y, alpha = 0, lambda = grid)
+
+#Size of our matrix
+#dim(coef(ridge.mod))
+```
+
+### Best MSE for Ridge Regression
+
+```{r}
+#Create our training/testing data
+train <- sample(1:nrow(x), nrow(x) * 0.8)  
+test <- (-train)
+y.test <- y[test]
+```
+
+```{r}
+ridge.mod <- glmnet(x[train,], y[train], alpha = 0, lambda = grid, thresh = 1e-12)
+ridge.pred <- predict(ridge.mod, s = 4, newx = x[test,])
+#Test MSE
+mean((ridge.pred - y.test)^2)
+```
+
+```{r}
+#Yea this was made?
+par(mar = c(5, 4, 4, 8))
+plot(ridge.mod)
+
+last_coef <- coef(ridge.mod)[, ncol(coef(ridge.mod))]
+last_coef <- last_coef[-1]
+
+axis(4, at = last_coef, labels = names(last_coef), las = 1, cex.axis = 0.7)
+```
+
+```{r}
+#Find the best lambda
+cv.out <- cv.glmnet(x[train,], y[train], alpha = 0)
+plot(cv.out)
+```
+
+```{r}
+bestlam <- cv.out$lambda.min
+bestlam
+```
+
+```{r}
+#MSE associated with the best lambda
+ridge.pred <- predict(ridge.mod, s = bestlam, newx = x[test,])
+mean((ridge.pred - y.test)^2)
+```
+
+```{r}
+#Refitting our ridge regression on the full dataset using the lambda chosen for use. (The best lambda we found)
+#Weights of the values
+out <- glmnet(x, y, alpha = 0)
+predict(out, type = "coefficients", s = bestlam)[1:13,]
+```
+
+### Multiple Linear Regression (Ridge)
+
+```{r}
+data_filtered <- data_final[data_final$pitch_type %in% c("FS","FF", "KC", "SL"), ]
+
+lm.tuned.ridge.fit <- lm(surgery ~ arm_angle + release_spin_rate + pitch_type, data = data_complete_na)
+
+summary(lm.tuned.ridge.fit)
+```
+
+```{r}
+plot(lm.tuned.ridge.fit)
+```
+
+### Ridge Regression Confusion Matrix
+
+This model is even worse when compared to the PCR Confusion Matrix, and struggles to balance the Type I and Type II error well to receive good results.
+
+It does a very poor job at predicting when a pitcher will not have surgery
+
+```{r}
+#Get the prediction class for our model and set as a factor.
+ridge.pred.prob <- predict(ridge.mod, s = 4, newx = x[test,], type = "response")
+
+# Convert probabilities to class predictions
+# Make sure you know what your surgery levels are
+data_complete_na$surgery <- as.factor(data_complete_na$surgery)
+
+ridge_pred_class <- ifelse(ridge.pred.prob > 0.285, 
+                          levels(data_complete_na$surgery)[2], 
+                          levels(data_complete_na$surgery)[1])
+ridge_pred_class <- as.factor(ridge_pred_class)
+
+# Get actual test values
+actual_class <- data_complete_na$surgery[test]
+
+# Create confusion matrix
+ridge_conf <- confusionMatrix(ridge_pred_class, 
+                             actual_class,
+                             positive = levels(actual_class)[2])
+
+print(ridge_conf)
+
+```
+
+```{r}
+#ROC curve 
+pred <- prediction(ridge.pred.prob, actual_class)
+perf <- performance(pred, "sens", "spec")
+plot(perf,
+     avg = "threshold",
+     colorize = TRUE,
+     lwd = 3,
+     main = "Sensitivity/Specificity Plot for Ridge Regression"
+    )
+```
+
+## Lasso Regression
+
+```{r}
+#Fitting a lasso model
+lasso.mod <- glmnet(x[train,], y[train],alpha = 1, lambda = grid, importance = TRUE)
+plot(lasso.mod, label = TRUE)
+```
+
+```{r}
+par(mar = c(5, 4, 4, 12))
+plot(lasso.mod, xlim = c(2, 5), ylim = c(-0.15, 0.05))
+
+last_coef <- coef(lasso.mod)[, ncol(coef(lasso.mod))]
+last_coef <- last_coef[-1]
+
+# --- spread labels that are too close together ---
+spread_labels <- function(positions, min_gap = 0.008) {
+  pos <- positions
+  sorted_idx <- order(pos)
+  pos_sorted <- pos[sorted_idx]
+  
+  # Iteratively push labels apart
+  for (iter in 1:100) {
+    moved <- FALSE
+    for (i in 2:length(pos_sorted)) {
+      if ((pos_sorted[i] - pos_sorted[i-1]) < min_gap) {
+        mid <- (pos_sorted[i] + pos_sorted[i-1]) / 2
+        pos_sorted[i-1] <- mid - min_gap / 2
+        pos_sorted[i]   <- mid + min_gap / 2
+        moved <- TRUE
+      }
+    }
+    if (!moved) break
+  }
+  
+  result <- pos
+  result[sorted_idx] <- pos_sorted
+  return(result)
+}
+
+# Get spread label positions
+label_pos <- spread_labels(last_coef, min_gap = 0.012)
+
+# Draw axis with spread labels + segments connecting to true positions
+axis(4, at = label_pos, labels = names(last_coef), las = 1, cex.axis = 0.7, tick = FALSE)
+
+# Tick marks at TRUE coefficient positions
+axis(4, at = last_coef, labels = FALSE, tcl = -0.3)
+
+# Connecting lines from true position to spread label
+segments(
+  x0 = par("usr")[2],          # right edge of plot
+  y0 = last_coef,              # true value
+  x1 = par("usr")[2] * 1.01,  # just outside plot
+  y1 = label_pos,              # spread label position
+  col = "gray60", lwd = 0.7, xpd = TRUE
+)
+```
+
+```{r}
+#importance_weights(lasso.mod)
+```
+
+```{r}
+#Perform cross-validation to compute the test error.
+cv.out <- cv.glmnet(x[train,], y[train], alpha = 1)
+plot(cv.out)
+```
+
+```{r}
+#Find our MSE
+bestlam.lasso <- cv.out$lambda.min
+lasso.pred <- predict(lasso.mod, s = bestlam.lasso, newx = x[test,])
+mean((lasso.pred - y.test)^2)
+```
+
+```{r}
+#CV has occured, we get our coefs.
+out <- glmnet(x,y,alpha = 1, lambda = grid)
+lasso.coef <- predict(out, type = 'coefficients', s = bestlam.lasso)[1:13,]
+lasso.coef
+```
+
+### Lasso Regression Confusion Matrix
+
+```{r}
+#Get the prediction class for our model and set as a factor.
+lasso.pred.prob <- predict(lasso.mod, s = 4, newx = x[test,], type = "response")
+
+# Convert probabilities to class predictions
+# Make sure you know what your surgery levels are
+#data_complete_na$surgery <- as.factor(data_complete_na$surgery)
+
+lasso_pred_class <- ifelse(lasso.pred.prob > 0.285, 
+                          levels(data_complete_na$surgery)[2], 
+                          levels(data_complete_na$surgery)[1])
+lasso_pred_class <- as.factor(ridge_pred_class)
+
+# Get actual test values
+actual_class <- data_complete_na$surgery[test]
+
+# Create confusion matrix
+lasso_conf <- confusionMatrix(lasso_pred_class, 
+                             actual_class,
+                             positive = levels(actual_class)[2])
+
+print(lasso_conf)
+```
+
+## Principle Component Regression
+
+```{r}
+#Model creation
+pcr.fit <- pcr(surgery ~ release_speed + arm_angle + spin_axis + release_spin_rate + pitch_type + release_pos_z , data = data_complete_na , scale = TRUE , validation = "CV")
+```
+
+```{r}
+#Model Summary
+#Gonna need to get some help understanding these results well.
+summary(pcr.fit)
+```
+
+```{r}
+#Cross-Validation MSE being plotted below
+#Due to the small number of compoents used, a better model might do better with less "noise" of data included.
+validationplot(pcr.fit, val.type = "MSEP")
+```
+
+### Training/Testing PCR
+
+```{r}
+#Perform a PCR on the trainign data and evaluate its test set performance
+pcr.fit <- pcr(surgery ~ release_speed + arm_angle + spin_axis + release_spin_rate + pitch_type , data = data_final, subset = train, scale = TRUE, validation = 'CV')
+validationplot(pcr.fit, val.type = "MSEP")
+```
+
+```{r}
+#Computing to find the test MSE
+pcr.pred <- predict(pcr.fit, x[test,], ncomp = 6)
+mean((pcr.pred - y.test)^2)
+```
+
+```{r}
+#Fit the PCR to the full data set, using M = 4
+#Ok so, I think I need to have more data explained by 4 components if I really want this to work...
+pcr.fit <- pcr(y ~ x, scale = TRUE, ncomp = 6)
+summary(pcr.fit)
+```
+
+### PCR Confusion Matrix
+
+```{r}
+#Setup
+#Establish Surgery as a Factor
+data_complete_na$surgery <- as.factor(data_complete_na$surgery)
+pcr_pred_prob <- predict(pcr.fit, x[test,], ncomp = 6)
+
+#Binary classification
+#changing that value to .3 allows for the model to have more freedom in choosing it's threshold value for prediction.
+pcr_pred_class <- ifelse(pcr_pred_prob > 0.30, 
+                         levels(data_complete_na$surgery)[2], 
+                         levels(data_complete_na$surgery)[1])
+pcr_pred_class <- as.factor(pcr_pred_class)
+
+#Testing values
+actual_class <- data_complete_na$surgery[test]
+
+#Confusion Matrix
+pcr_conf <- confusionMatrix(pcr_pred_class, 
+                            actual_class, 
+                            positive = levels(actual_class)[2])
+
+print(pcr_conf)
+#Moving the threshold of the pcr_pred_class allowed me to find a better balance for the confusion matrix.
+```
+
+## Partial Least Squares Regression
+
+```{r}
+#Using the plsr() libary like the pls() function. Slight different here
+pls.fit <- plsr(surgery ~ release_speed + arm_angle + spin_axis + release_spin_rate + pitch_type + release_pos_z , data = data_final , subset = train, scale = TRUE, validation = "CV")
+summary(pls.fit)
+```
+
+```{r}
+#Cross-validation error 
+validationplot(pls.fit, val.type =  "MSEP")
+```
+
+```{r}
+#MSE
+pls.pred <- predict(pls.fit, x[test,],ncomp = 13)
+mean((pls.pred - y.test)^2)
+```
+
+```{r}
+#Avoid this rn
+pls.fit <- plsr(surgery ~ release_speed + arm_angle + spin_axis + release_spin_rate + pitch_type , data = data_final , scale = TRUE, ncomp = 12)
+summary(pls.fit)
+```
+
+### Partial Least Squares Confusion Matrix
+
+This one has the same setup as the confusion matrix for principle component regression.
+
+```{r}
+#Establish Surgery as a Factor
+#Uncomment to run if needed.
+data_complete_na$surgery <- as.factor(data_complete_na$surgery)
+pls_pred_prob <- predict(pls.fit, x[test,], ncomp = 13)
+
+#Binary classification
+#changing that value to .3 allows for the model to have more freedom in choosing it's threshold value for prediction.
+pls_pred_class <- ifelse(pls_pred_prob > 0.30, 
+                         levels(data_complete_na$surgery)[2], 
+                         levels(data_complete_na$surgery)[1])
+pls_pred_class <- as.factor(pcr_pred_class)
+
+#Testing values
+actual_class <- data_complete_na$surgery[test]
+
+#Confusion Matrix
+pls_conf <- confusionMatrix(pls_pred_class, 
+                            actual_class, 
+                            positive = levels(actual_class)[2])
+
+print(pls_conf)
+```
+
+## KNN Regression
+
+```{r}
+#Setup process, training and testing data. Setting direction as well.
+dim(data_complete_na)
+attach(data_complete_na)
+
+#Standardize the data so all variables are given a mean of 0, SD of 1.
+standardized.X <- scale(data_complete_na[,-6])
+dim(standardized.X)
+```
+
+```{r}
+#Set up training and testing data. Using the first 20000 points for the testing data.
+test <- 1:20000
+train.X <- standardized.X[-test,]
+test.X <- standardized.X[test,]
+train.Y <- surgery[-test]
+test.Y <- surgery[test]
+```
+
+There is some issue where with using KNN and it being unable to move itself with in the data, have to look into fixing...
+
+```{r}
+#Begin KNN predicatiom with K = 1
+knn.pred <- knn(train.X, test.X, train.Y, k = 50)
+#Should be greater then 0?
+mean(test.Y != knn.pred)
+mean(test.Y != 0)
+```
+
+```{r}
+table(knn.pred, test.Y)
+```
+
+## Random Forest
+
+```{r}
+data_complete_na <- data_complete_na %>%
+  mutate(
+    pitch_type = as.factor(pitch_type),    # must be factor for randomForest
+    surgery    = as.factor(surgery),       # must be factor for classification
+    release_speed     = as.numeric(release_speed),
+    arm_angle         = as.numeric(arm_angle),
+    spin_axis         = as.numeric(spin_axis),
+    release_spin_rate = as.numeric(release_spin_rate)
+  )
+```
+
+```{r}
+str(data_complete_na)
+```
+
+```{r}
+#This is the actual random forest, ignore all the other crap 
+
+library(caret)
+library(randomForest)
+
+# Split from data_complete_na consistently
+train_index <- createDataPartition(data_complete_na$surgery, p = 0.8, list = FALSE)
+train <- data_complete_na[train_index, ]
+test  <- data_complete_na[-train_index, ]
+
+# Train model on train (no need for subset= when using train directly)
+rf.surgery <- randomForest(
+  surgery ~ release_speed + arm_angle + spin_axis + release_spin_rate + pitch_type,
+  data       = train,       # ← use train directly instead of subset =
+  mtry       = 3,
+  importance = TRUE
+)
+
+# Predict on test
+predictions <- predict(rf.surgery, newdata = test)
+
+# Confusion matrix
+confusionMatrix(predictions, test$surgery)
+
+# Variable importance plot
+varImpPlot(rf.surgery, main = "Variable Importance for Surgery Prediction")
+
+```
+
+```{r}
+bag.baseball <- randomForest(surgery ~ release_speed + arm_angle + spin_axis + release_spin_rate + pitch_type , data = data_complete_na, subset = train, mtry = 12, importance = TRUE)
+
+bag.baseball
+```
+
+```{r}
+#this portion is giving me trouble trying to find MSE, will come back to and debug more later
+yhat.bag <- predict(bag.baseball, newdata = data_complete_na[-train,])
+data_complete_na.test <- data_complete_na[-train, "surgery"]
+```
+
+```{r}
+plot(yhat.bag, data_complete_na.test)
+abline(0,1)
+```
+
+```{r}
+mean((yhat.bag - data_complete_na.test)^2)
+```
+
+Getting the warning "invalid mtry : reset to within range", will have to investigate where that is coming from and the reason behind its occurrence.
+
+```{r}
+#Growing a random forest
+rf.baseball <- randomForest(surgery ~ release_speed + arm_angle + spin_axis + release_spin_rate + pitch_type , data = data_complete_na, subset = train, mtry = 6, importance = TRUE)
+
+yhat.rf <- predict(rf.baseball, newdata = data_complete_na[-train,])
+mean((yhat.rf - data_complete_na.test)^2)
+```
+
+```{r}
+importance(rf.baseball)
+```
+
+```{r}
+varImpPlot(rf.baseball)
+```
+
+### Random Forest Confusion Matrix
+
+To do...
+
+## Bayes Lab
+
+```{r}
+#Data reset here so I have everything straight as I need it
+bayes_data$surgery = as.numeric(data_complete_na$surgery)
+#bayes_data$surgery = as.numeric(bayes_data$pitch_type)
+#levels(bayes_data$surgery) = c('No Surgery','Surgery')
+
+#bayes_data = data_complete_na
+bayes_data
+```
+
+```{r}
+#Import the packages I need
+#I got bros email on SPEEDDIAL
+library(BayesFactor)
+library(brms)
+```
+
+```{r}
+#I first tried to use anovaBF, but since my predictors are continuous, I was suggested to use regressionBF() instead
+#Ok that didn't work, swapped to lmBF. I will also try brms here too.
+
+#Since lmBF (from my reading/understanding) is just the Bayesian form of linear regression, I will have to do some digging into brms and other methods to possibly find a way to get better results.
+
+bayesball.lm = lmBF(surgery ~ release_speed + arm_angle + spin_axis + release_spin_rate + pitch_type , data = bayes_data)
+```
+
+```{r}
+bayesball.lm
+```
+
+```{r}
+summary(bayesball.lm)
+```
+
+```{r}
+#This final suggestion is something that Claude just cooked up, I really don't know what is happening here.
+
+# Extract posterior samples for deeper inspection
+posterior_samples <- posterior(bayesball.lm, iterations = 1000)
+summary(posterior_samples)
+
+# Plot posterior distributions
+plot(posterior_samples)
+```
+
+### BRMS Stuff
+
+```{r}
+data_complete_na$pitch_FF <- as.integer(data_complete_na$pitch_type == "FF")
+data_complete_na$pitch_SL <- as.integer(data_complete_na$pitch_type == "SL")
+data_complete_na$pitch_FS <- as.integer(data_complete_na$pitch_type == "FS")
+data_complete_na$pitch_KC <- as.integer(data_complete_na$pitch_type == "KC")
+```
+
+```{r}
+bayes.brms <- brm(surgery ~ release_speed + arm_angle + spin_axis + release_spin_rate + pitch_type + release_pos_z + pitch_FF:pitch_SL + pitch_FF:pitch_FS + pitch_FF:pitch_KC , data = data_complete_na, 
+                  family = bernoulli(link = 'logit'),
+                  chains = 5)
+```
+
+```{r}
+prior_summary(bayes.brms)
+```
+
+```{r}
+summary(bayes.brms)
+```
+
+```{r}
+#Graphics
+plot(bayes.brms)
+```
+
+```{r}
+# Get all plots as a list
+bayes_plots <- plot(bayes.brms, ask = FALSE)  # ask = FALSE stops it prompting between pages
+
+# Save each one separately
+for (i in seq_along(bayes_plots)) {
+  ggsave(
+    filename = paste0("bayes_plot_", i, ".png"),
+    plot     = bayes_plots[[i]],
+    width    = 14,
+    height   = 10,
+    dpi      = 300
+  )
+}
+```
+
+```{r}
+library(bayesplot)
+
+# Marginal effects of each predictor
+#conditional_effects(bayes.brms)
+
+# Specific predictor
+conditional_effects(bayes.brms, effects = "release_speed")
+conditional_effects(bayes.brms, effects = "pitch_type")
+```
+
+## SHAP / XGBoost
+
+```{r}
+library(xgboost)
+library(iml)
+
+#Dataset we will use here
+data_complete_na
+
+#Establish training and test
+#train_shap <- as.matrix(data_complete_na[, -1])  # Features
+train_shap_labels <- data_complete_na$surgery 
+```
+
+```{r}
+# Convert to factor first
+data_complete_na$pitch_type <- as.factor(data_complete_na$pitch_type)
+
+# Save the mapping with clearer column names
+factor_levels <- levels(data_complete_na$pitch_type)
+factor_mapping <- data.frame(
+  pitch_name    = factor_levels,
+  encoded_value = 1:length(factor_levels)
+)
+
+print(factor_mapping)
+
+# Then encode and build matrix
+data_complete_na$pitch_type <- as.numeric(data_complete_na$pitch_type)
+train_shap <- as.matrix(data_complete_na[, -1])
+
+```
+
+```{r}
+#Model for xgboost
+xgboost.model <- xgboost(x = train_shap, y = train_shap_labels, nrounds = 100, objective = "binary:logistic")
+```
+
+```{r}
+# Define a custom predict function
+predict_function <- function(model, newdata) {
+  predict(model, as.matrix(newdata))
+}
+
+# Pass it into Predictor$new
+predictor.shap <- Predictor$new(
+  xgboost.model,
+  data = as.data.frame(train_shap),
+  y = train_shap_labels,
+  predict.function = predict_function
+)
+
+# Now try Shapley again
+shapley <- Shapley$new(predictor.shap, x.interest = as.data.frame(train_shap[1, , drop = FALSE]))
+```
+
+```{r}
+shap_data <- shapley$results %>%
+  mutate(feature.value = gsub("=.*", "", feature.value)) %>%
+  mutate(feature.value = gsub("pitch_type", "Slider (SL)", feature.value))
+
+ggplot(shap_data, aes(x = reorder(feature.value, phi), 
+                      y = phi, 
+                      fill = ifelse(phi > 0, "Positive", "Negative"))) +
+  geom_col() +
+  scale_fill_manual(
+    values = c("Positive" = "firebrick", "Negative" = "steelblue"),
+    name   = "Direction"
+  ) +
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    plot.title      = element_text(face = "bold", size = 14),
+    axis.text       = element_text(size = 11),
+    legend.position = "bottom"
+  ) +
+  labs(
+    title = "SHAP Values for\nSurgery Prediction",
+    x     = "Feature",
+    y     = "SHAP Value"
+  ) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray50")
+```
+
+## Presentation Supplies
+
+```{r}
+data_complete_na %>% count(pitch_type)
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+data_complete_na %>%
+  count(pitch_type) %>%
+  mutate(pitch_type = reorder(pitch_type, n)) %>%
+  ggplot(aes(x = pitch_type, y = n)) +
+  geom_col(fill = "steelblue", width = 0.7) +     
+  scale_y_continuous(labels = scales::comma) +
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    axis.text  = element_text(size = 11),
+    panel.grid.major.y = element_blank()
+  ) +
+  labs(
+    title = "Pitch Type Distribution",
+    x     = "Pitch Type",
+    y     = "Count"
+  )
+```
+
+```{r}
+library(gtsummary)
+
+tbl <- data_complete_na %>%
+  tbl_summary(
+    by = surgery,                        # your group column (0/1 or "Yes"/"No")
+    statistic = list(
+      all_continuous()  ~ "{mean} ± {sd}",   # matches the ± format in your table
+      all_categorical() ~ "{n} ({p})"         # matches the n (%) format
+    ),
+    digits = all_continuous() ~ 2,
+    missing = "no"
+  ) %>%
+  add_p() %>%                            # adds the P column
+  bold_p(t = 0.05) %>%                   # bolds significant p-values like in your table
+  modify_header(label ~ "**Variables**") %>%
+  modify_spanning_header(
+    c("stat_1", "stat_2") ~ "**Pitching Statistics**"
+  )
+
+tbl
+```
+
+```{r}
+library(gt)
+```
+
+```{r}
+# Save as HTML (no browser needed)
+tbl %>%
+  as_gt() %>%
+  gt::gtsave("data_table2.html")
+```
+
+```{r}
+library(gtsummary)
+
+# --- Section 1: Release Metrics ---
+tbl1 <- data_complete_na %>%
+  select(surgery, release_speed, release_pos_z, release_spin_rate) %>%
+  tbl_summary(
+    by = surgery,
+    statistic = list(all_continuous() ~ "{mean} \u00b1 {sd}"),
+    digits = all_continuous() ~ 2,
+    missing = "no"
+  ) %>%
+  add_p(test = list(all_continuous() ~ "kruskal.test")) %>%
+  bold_p(t = 0.05)
+
+# --- Section 2: Pitch Mechanics ---
+tbl2 <- data_complete_na %>%
+  select(surgery, arm_angle, spin_axis, pitch_type) %>%
+  tbl_summary(
+    by = surgery,
+    statistic = list(
+      all_continuous()  ~ "{mean} \u00b1 {sd}",
+      all_categorical() ~ "{n} ({p})"
+    ),
+    digits = all_continuous() ~ 2,
+    missing = "no"
+  ) %>%
+  add_p(test = list(
+    all_continuous()  ~ "kruskal.test",
+    all_categorical() ~ "chisq.test"
+  )) %>%
+  bold_p(t = 0.05)
+
+# --- Stack and format ---
+tbl_final <- tbl_stack(
+  tbls = list(tbl1, tbl2),
+  group_header = c("Release Metrics", "Pitch Mechanics")
+) %>%
+  modify_header(label ~ "**Variables**") %>%
+  bold_labels()
+
+tbl_final
+```
+
+```{r}
+
+library(gtsummary)
+library(dplyr)
+library(purrr)
+
+# Get all unique pitch types dynamically
+pitch_types <- unique(data_complete_na$pitch_type)
+
+# Build one table per pitch type
+tbl_list <- map(pitch_types, ~ {
+  data_complete_na %>%
+    filter(pitch_type == .x) %>%
+    select(surgery, release_speed, arm_angle,
+           spin_axis, release_spin_rate, release_pos_z) %>%
+    tbl_summary(
+      by = surgery,
+      statistic = list(all_continuous() ~ "{mean} \u00b1 {sd}"),
+      digits = all_continuous() ~ 2,
+      missing = "no"
+    ) %>%
+    add_ci(
+      method = list(all_continuous() ~ "t.test"),
+      style_fun = all_continuous() ~ function(x) style_sigfig(x, digits = 2)
+    ) %>%
+    add_p(
+      test = list(all_continuous() ~ "wilcox.test")
+    ) %>%
+    bold_p(t = 0.05)
+})
+
+# Stack all pitch type tables vertically
+tbl_final <- tbl_stack(
+  tbls = tbl_list,
+  group_header = pitch_types     # uses pitch type name as section divider
+) %>%
+  modify_header(label ~ "**Variable**") %>%
+  bold_labels()
+
+tbl_final
+```
+
+```{r}
+data_complete_na %>% count(surgery)
+```
