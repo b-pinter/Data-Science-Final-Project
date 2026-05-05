@@ -69,6 +69,10 @@ The research pipeline consists of:
 
 The project identifies correlations between specific pitching patterns and Tommy John surgery risk, with the Bayesian hierarchical model providing probabilistic predictions that account for individual pitcher characteristics and uncertainty in the data.
 
+## Future Work
+
+The goal of future work is to look at the interaction terms between different types of baseball pitches, since pitchers usually have a collection of pitches they thrown and not just one. The interaction between these terms will hopefully faciliate the better predicition of injury and when it will occur, because since we know that individual pitch types lead to surgery, pitch types together should also lead to surgery.
+
 ## Contact
 
 **LinkedIn**: www.linkedin.com/in/brady-pinter
