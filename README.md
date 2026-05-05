@@ -62,6 +62,10 @@ The research pipeline consists of:
 3. **Bayesian Implementation**: Implementing bayesian regression model to account for individual pitcher variability
 4. **Interpretation**: Detailed look into the outputs given across the board to understand what predcitors had the biggest impact upon a pitcher having to get Tommy John Surgery.
 
+### Methodology Image
+
+![Alt text](/Users/bradypinter/SeniorProject/BayesBallModel.drawio.png)
+
 ## Key Findings
 
 The project identifies correlations between specific pitching patterns and Tommy John surgery risk, with the Bayesian hierarchical model providing probabilistic predictions that account for individual pitcher characteristics and uncertainty in the data.
