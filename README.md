@@ -21,6 +21,7 @@
     - LASSO / Ridge Regression
     - Priniciple Component Regression
     - Partial Least Squares Regression
+    - SHAP
   - Random Forest
   - Bayesian Regression Model using STAN (BRMS)
 
@@ -53,12 +54,13 @@ Open and execute the R files in RStudio or your preferred R environment:
 
 The research pipeline consists of:
 
-1. **Data Collection**: Aggregating pitcher statistics and Tommy John surgery records using BaseballR
-2. **Feature Engineering**: Extracting relevant pitching metrics and temporal patterns
-3. **Model Development**: Building and comparing multiple statistical and machine learning models
-4. **Bayesian Inference**: Implementing hierarchical models to account for individual pitcher variability
-5. **Validation**: Cross-validation and prediction accuracy assessment
-6. **Visualization**: Interactive exploration of patterns and predictions
+1. **Data Collection**: Aggregating pitcher statistics and Tommy John surgery records using BaseballR, all active pitchers between 2018 and 2024 were used. If a pitcher had Tommy John Surgery within this time frame, pitchers were collected from two years prior to the surgery itself. All other pitchers had data collected for pitches thrown between 2018 and 2024.
+2. **Feature Work**: A variety of machine learning technqiues were used to select features of possible significance, and drop those that had limited or no impact upon prediction outcomes. 
+   - LASSO/Ridge Regression : Variable shrinkage to remove redundant/useless predictors
+   - PCR/PLS : Variable selection to cross-validate dropped predictors with LASSO/Ridge Regression output.
+   - SHAP : Resolve multicollinearity problem by looking each predictor individually to better understand useful and useless predictors.
+3. **Bayesian Implementation**: Implementing bayesian regression model to account for individual pitcher variability
+4. **Interpretation**: Detailed look into the outputs given across the board to understand what predcitors had the biggest impact upon a pitcher having to get Tommy John Surgery.
 
 ## Key Findings
 
