@@ -64,8 +64,7 @@ devtools::install_github(repo = "BillPetti/baseballr", force = T)
 #Data was confidmed from at least "one news article" by the person who made it.
 
 #The following code will take all pitchers who HAD Tommy John Surgery since 2020
-#They will be compiled into this data
-#FIXED - Takes all data from pitchers TWO YEARS prior to surgery
+#Takes all data from pitchers TWO YEARS prior to surgery
 surgeryList <- read.csv('Surgery_List.csv')
 surgeryList$TJ.Surgery.Date <- as.Date(surgeryList$TJ.Surgery.Date, format = "%m/%d/%Y")
 filtered_df <- surgeryList[surgeryList$TJ.Surgery.Date > as.Date("2020-01-01"), ]
@@ -92,8 +91,6 @@ surgery_pitchers <- read.csv("data_surgery.csv")
 surgery_pitchers <- surgery_pitchers %>% mutate(surgery = 1)
 
 #Non-Injured Players
-#TO FIX - WHY NOT ALL DATA SHOWING?
-#CHECK THE INJURED CSV FILE FOR IF IT WAS USED BEFORE
 #Pulls data on all pitches from non-injured pitchers from 2018 to 2024.
 #Complies into a tibble for use.
 non_injured_2024 <- statcast_search(start_date = "2024-04-15",
@@ -131,16 +128,14 @@ combined_non_injured <- combined_non_injured %>% mutate(surgery = 0)
 non_surgery_pitchers <- read.csv('data_noSurgery.csv')
 #Add column since all pitcher data here is from players with no injury.
 
-
 model <- lm(surgery ~  release_speed + release, data = non_injured)
 ols_step_all_possible(model)
 
-#Complete Dataset
-
+#Completed dataset, before removing useless columns
 complete_pitchers <- bind_rows(non_surgery_pitchers,surgery_pitchers)
-#write_csv(complete_pitchers, "data_complete.csv")
-#data_complete <- read_csv('data_complete.csv')
+
 #EXTRA CLEANING
+#Removing redundant and useless columns from the data
 data_complete = drop_na(data_complete)
 data_complete_test <- data_complete %>% select(-c(game_date, player_name
                                              , batter, pitcher, events, description,
@@ -154,12 +149,10 @@ data_complete_test <- data_complete %>% select(-c(game_date, player_name
   mutate(pitch_type = as.factor(pitch_type))
 
 #write_csv(data_complete_test, "data_smaller.csv")
+#Final dataset for use.
 data_final <- read_csv('data_smaller.csv')
 data_final$surgery <- as.factor(data_final$surgery)
-#LOOK AT
-#REMOVE NAN
-#Check factors, using str()
-#glm model()
+#Machine Learning Modeling Testing/Preliminary Work
 #Logit Regression, will automatically delete nans
 model <- glm(surgery ~  release_speed + arm_angle + 
               pitch_type + spin_axis + api_break_x_arm + release_spin_rate, data = data_final,
