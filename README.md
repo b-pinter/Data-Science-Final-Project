@@ -1,4 +1,4 @@
-# Tommy John Surgery Research
+# Data Science Final Project - UCL Prediciton 
 
 - A data-driven analysis exploring the relationship between pitching characteristics and Tommy John surgery outcomes using Bayesian statistical methods and machine learning.
 
