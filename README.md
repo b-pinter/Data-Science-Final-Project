@@ -48,7 +48,7 @@
 
 Open and execute the R files in RStudio or your preferred R environment:
 1. Start with `Baseball_Basics.R` for data preparation
-2. Explore `MachineLearningModels.qmd` and `RegressionBoundaries.qmd` for model development and use
+2. Explore `MachineLearningModels.qmd` and `RegressionBoundaries.qmd` for model framework development and output.
 
 ## Methodology
 
@@ -68,4 +68,4 @@ The project identifies correlations between specific pitching patterns and Tommy
 
 ## Contact
 
-www.linkedin.com/in/brady-pinter
+**LinkedIn**: www.linkedin.com/in/brady-pinter
