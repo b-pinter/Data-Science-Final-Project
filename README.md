@@ -25,6 +25,8 @@ A data-driven analysis of Tommy John injury in the MLB between 2018 and 2024, wi
     - SHAP
   - Random Forest
   - Bayesian Regression Model using STAN (BRMS)
+- **Additional Resources**
+  - For information on visual outputs (besides looking at the code), please check out the `Spark_Presenation.pdf` for a selection of model outputs. 
 
 ## Repository Structure
 
