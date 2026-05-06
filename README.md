@@ -1,6 +1,6 @@
 # Data Science Final Project - UCL Prediciton 
 
-- A data-driven analysis of Tommy John injury in the MLB between 2018 and 2024.
+A data-driven analysis of Tommy John injury in the MLB between 2018 and 2024, with the goal of predicitng Tommy John injury.
 
 ## Overview
 
@@ -9,7 +9,8 @@
 - All of the preliminary work with the machine learning models was used to build a strong Bayesian Regression Model for predicitng injury outcomes, which had mixed results.
 
 **Research Presentation:** 
-- Preliminary findings were presented at the Conneticut Sports Analytics Symposium (CSAS) 2026 at UCONN.
+- Preliminary findings were presented at the Conneticut Sports Analytics Symposium (CSAS) 2026 at UCONN and Belmont SPARK 2026.
+  - You can find the SPARK presenation attached to this github page as well. 
 
 ## Features
 
@@ -34,36 +35,40 @@
 ├── RegressionBoundaries.qmd   # Model tuning 
 ├── SPARK_Presenation.pdf      # Project Presenation
 ├── data_smaller.csv           # Data used for project
+├── AdvancedTopics             # Credit Section for class
 └── data_completed_na.csv      # A cleaned version of data_smaller.csv
+
 ```
 
 ## Technologies Used
 
 ### R Environment
 - **BaseballR**: MLB data acquisition and processing
-- **RStan**: Bayesian statistical modeling and inference
+- **BRMS**: Bayesian statistical modeling and inference
 - **tidyverse**: Data manipulation and visualization
+- **ISLP**: Machine Learning Models
 
 ### Running Statistical Analysis
 
 Open and execute the R files in RStudio or your preferred R environment:
 1. Start with `Baseball_Basics.R` for data preparation
-2. Explore `MachineLearningModels.qmd` and `RegressionBoundaries.qmd` for model framework development and output.
+2. Explore `MachineLearningModels.qmd` and `RegressionBoundaries.qmd` for model framework development and outputs.
 
 ## Methodology
 
 The research pipeline consists of:
 
-1. **Data Collection**: Aggregating pitcher statistics and Tommy John surgery records using BaseballR, all active pitchers between 2018 and 2024 were used. If a pitcher had Tommy John Surgery within this time frame, pitchers were collected from two years prior to the surgery itself. All other pitchers had data collected for pitches thrown between 2018 and 2024.
-2. **Feature Work**: A variety of machine learning technqiues were used to select features of possible significance, and drop those that had limited or no impact upon prediction outcomes. 
+1. **Data Collection**: Aggregating pitcher statistics and Tommy John surgery records using BaseballR, all active pitchers between 2018 and 2024 were used. If a pitcher had Tommy John Surgery within this time frame, pitchers were collected from two years prior to the surgery itself. All other pitchers had data collected for pitches thrown between 2018 and 2024. Check out `Baseball_Basics.R` to see how data was collected.
+3. **Feature Work**: A variety of machine learning technqiues were used to select features of possible significance, and drop those that had limited or no impact upon prediction outcomes. 
    - LASSO/Ridge Regression : Variable shrinkage to remove redundant/useless predictors
    - PCR/PLS : Variable selection to cross-validate dropped predictors with LASSO/Ridge Regression output.
    - SHAP : Resolve multicollinearity problem by looking each predictor individually to better understand useful and useless predictors.
-3. **Bayesian Implementation**: Implementing bayesian regression model to account for individual pitcher variability
-4. **Interpretation**: Detailed look into the outputs given across the board to understand what predcitors had the biggest impact upon a pitcher having to get Tommy John Surgery.
+4. **Final Implementation**: After the feature work was completed, and redundant information was dropped, a random forest and BRMS model were build to get the final results.
+5. **Interpretation**: Detailed look into the outputs given across the board to understand what predcitors had the biggest impact upon a pitcher having to get Tommy John Surgery.
 
 ### Methodology Image
 
+This image gives you a idea of the framework used to build the results for interpretation, note the multiple models used to build the best data possible.
 ![A image of the research methodolgoy used in this project.](BayesBallModel.drawio.png)
 ## Key Findings
 
