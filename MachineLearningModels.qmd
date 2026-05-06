@@ -29,11 +29,13 @@ library(ROCR)
 
 ## Summary Write-Up
 
--   Timeline is on track at the moment, since I was planning on over half my ML models done by the middle of this month, I have gotten most of the "big" ones put together and have begun analysis relating to them.
+-   This .qmd document includes all the machine learning models used in building the framework that I outlined in my presentation. All of the models you see here in this document were used one way or another in building the framework that outlined the data that I had.
 
-    -   I plan on comparing the MSE scores, and looking at the weights for all of my models as well. What is becoming significant?
+    -   Best way to compare all the models is using MSE.
 
-    -   Multicollinearity is a major issue (will show a example of why below)
+    -   Multicollinearity is a major issue
+
+-   Also, a lot of these models are based off the ISLP textbook
 
 # Frequentist and ML Approaches for Baseball
 
@@ -61,6 +63,8 @@ data_final %>% count(pitch_type)
 
 ## Removing Redundant Pitches
 
+So this actually came a lot later in the process, but I just put it here so that you can see what pitch types got dropped.
+
 ```{r}
 #So we're gonna drop some data from the pitch_type column, FC is "fielders choice" which really isn't a pitch. it also had some limited connections to the data.
 
@@ -68,6 +72,16 @@ data_final %>% count(pitch_type)
 #drop_list <- ("CS","FA","EP",'FC','FO','KN')
 
 data_final <- data_final %>% filter(., !pitch_type %in% c("CS",'FA','EP','FC','FO','KN','PO','SC','SV'))
+```
+
+Had a issues with nan values in the dataset, so I removed them and remove redundant information here as well to use only what I needed.
+
+```{r}
+#Had a issue with NA values, so removing them here before moving on.
+data_complete_na <- data_final %>%
+  select(surgery, release_speed, arm_angle, spin_axis, 
+         release_spin_rate, pitch_type, release_pos_z) %>%
+  na.omit()
 ```
 
 ## Multiple Linear Regression
@@ -80,33 +94,15 @@ lm.fit <- lm(surgery ~ release_speed + arm_angle + spin_axis + release_spin_rate
 summary(lm.fit)
 ```
 
-```{r}
-lm.fit <- lm(surgery ~ release_speed + arm_angle + spin_axis + release_spin_rate + release_pos_z + pitch_type, data = data_complete_na)
-
-summary(lm.fit)
-```
-
-### Checking Multiple Linear Regression Assumptions?
+### Checking Multiple Linear Regression Assumptions
 
 ```{r}
 #Checking model assumptions post-creation
-#What is happening LOL
+#Assumptions are terrible, ok...
 plot(lm.fit)
 ```
 
-## Weighted Multiple Linear Regression
-
-Coming soon...
-
 ## Ridge Regression
-
-```{r}
-#Had a issue with NA values, so removing them here before moving on.
-data_complete_na <- data_final %>%
-  select(surgery, release_speed, arm_angle, spin_axis, 
-         release_spin_rate, pitch_type, release_pos_z) %>%
-  na.omit()
-```
 
 ```{r}
 #We will be using the glmnet package for this section, following instructions from the ISLP textbook.
@@ -174,25 +170,11 @@ out <- glmnet(x, y, alpha = 0)
 predict(out, type = "coefficients", s = bestlam)[1:13,]
 ```
 
-### Multiple Linear Regression (Ridge)
-
-```{r}
-data_filtered <- data_final[data_final$pitch_type %in% c("FS","FF", "KC", "SL"), ]
-
-lm.tuned.ridge.fit <- lm(surgery ~ arm_angle + release_spin_rate + pitch_type, data = data_complete_na)
-
-summary(lm.tuned.ridge.fit)
-```
-
-```{r}
-plot(lm.tuned.ridge.fit)
-```
-
 ### Ridge Regression Confusion Matrix
 
 This model is even worse when compared to the PCR Confusion Matrix, and struggles to balance the Type I and Type II error well to receive good results.
 
-It does a very poor job at predicting when a pitcher will not have surgery
+It does a very poor job at predicting when a pitcher will not have surgery. (THIS WAS FIXED USING THE YOUDEN'S J-STATISTIC!!)
 
 ```{r}
 #Get the prediction class for our model and set as a factor.
@@ -460,48 +442,27 @@ pls_conf <- confusionMatrix(pls_pred_class,
 print(pls_conf)
 ```
 
-## KNN Regression
+## Outcomes from Machine Learning Models (and SHAP, which came later)
 
-```{r}
-#Setup process, training and testing data. Setting direction as well.
-dim(data_complete_na)
-attach(data_complete_na)
+-   So I dropped a LOT of pitch types which basically had zero use. If you scrolled back up the section called "Removing Redundant Pitch Types" you can see all the pitch types I dropped.
 
-#Standardize the data so all variables are given a mean of 0, SD of 1.
-standardized.X <- scale(data_complete_na[,-6])
-dim(standardized.X)
-```
+    -   All of this was based off what values shrank/were dropped across the various machine learning models I used. This includes things like Ridge Regression, Lasso Regression, PCR and PLS.
 
-```{r}
-#Set up training and testing data. Using the first 20000 points for the testing data.
-test <- 1:20000
-train.X <- standardized.X[-test,]
-test.X <- standardized.X[test,]
-train.Y <- surgery[-test]
-test.Y <- surgery[test]
-```
+    -   SHAP also came in handy since I had multicollinerarity issues and was great at getting under the surface and looking at each variable in a more "separate" context.
 
-There is some issue where with using KNN and it being unable to move itself with in the data, have to look into fixing...
+        -   This is how we found out that slider had something to do with Tommy John Surgery.
 
-```{r}
-#Begin KNN predicatiom with K = 1
-knn.pred <- knn(train.X, test.X, train.Y, k = 50)
-#Should be greater then 0?
-mean(test.Y != knn.pred)
-mean(test.Y != 0)
-```
+-   I went back and re-ran some of the machine learning models using the data_complete_na, which is the updated dataset. This has the nans removed and also all the useless pitch types removed as well.
 
-```{r}
-table(knn.pred, test.Y)
-```
+-   All of this was then used to build the "best" Random Forest / BRMS model I could.
 
 ## Random Forest
 
 ```{r}
 data_complete_na <- data_complete_na %>%
   mutate(
-    pitch_type = as.factor(pitch_type),    # must be factor for randomForest
-    surgery    = as.factor(surgery),       # must be factor for classification
+    pitch_type = as.factor(pitch_type),    
+    surgery    = as.factor(surgery),     
     release_speed     = as.numeric(release_speed),
     arm_angle         = as.numeric(arm_angle),
     spin_axis         = as.numeric(spin_axis),
@@ -519,7 +480,6 @@ str(data_complete_na)
 library(caret)
 library(randomForest)
 
-# Split from data_complete_na consistently
 train_index <- createDataPartition(data_complete_na$surgery, p = 0.8, list = FALSE)
 train <- data_complete_na[train_index, ]
 test  <- data_complete_na[-train_index, ]
@@ -527,7 +487,7 @@ test  <- data_complete_na[-train_index, ]
 # Train model on train (no need for subset= when using train directly)
 rf.surgery <- randomForest(
   surgery ~ release_speed + arm_angle + spin_axis + release_spin_rate + pitch_type,
-  data       = train,       # ← use train directly instead of subset =
+  data       = train,       
   mtry       = 3,
   importance = TRUE
 )
@@ -588,6 +548,8 @@ To do...
 
 ## Bayes Lab
 
+This stuff up here was a older attempt at doing the bayes portion, did not work.
+
 ```{r}
 #Data reset here so I have everything straight as I need it
 bayes_data$surgery = as.numeric(data_complete_na$surgery)
@@ -635,12 +597,16 @@ plot(posterior_samples)
 
 ### BRMS Stuff
 
+So this was a attempt to do the interaction terms using the various types of pitches. If you saw my presentation Dr. Davis, this idea did not work. I will go back and be working on this after I finish this year of schooling.
+
 ```{r}
 data_complete_na$pitch_FF <- as.integer(data_complete_na$pitch_type == "FF")
 data_complete_na$pitch_SL <- as.integer(data_complete_na$pitch_type == "SL")
 data_complete_na$pitch_FS <- as.integer(data_complete_na$pitch_type == "FS")
 data_complete_na$pitch_KC <- as.integer(data_complete_na$pitch_type == "KC")
 ```
+
+The model itself
 
 ```{r}
 bayes.brms <- brm(surgery ~ release_speed + arm_angle + spin_axis + release_spin_rate + pitch_type + release_pos_z + pitch_FF:pitch_SL + pitch_FF:pitch_FS + pitch_FF:pitch_KC , data = data_complete_na, 
@@ -688,9 +654,10 @@ conditional_effects(bayes.brms, effects = "release_speed")
 conditional_effects(bayes.brms, effects = "pitch_type")
 ```
 
-## SHAP / XGBoost
+## SHAP
 
 ```{r}
+#I had XGboost here, never really ending up using it so it will sit here dormant.
 library(xgboost)
 library(iml)
 

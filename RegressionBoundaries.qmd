@@ -3,6 +3,12 @@ title: "RegressionBoundaries"
 format: html
 ---
 
+## Information about this section
+
+This .qmd file was used to build the best boundary for the ridge regression using Youden's J-Statistic
+
+I tried to do the same for Lasso Regression, but I didn't have time to get it working.
+
 ```{r}
 library(baseballr)
 library(tidyverse)
